@@ -1,93 +1,112 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-    --color-primary: #3b82f6;
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-danger: #ef4444;
-    --color-bg-light: #f8f9fa;
-    --color-card-light: #ffffff;
-    --color-bg-dark: #1f2937;
-    --color-card-dark: #374151;
-    --color-text-light: #1f2937;
-    --color-text-dark: #f9fafb;
-}
-
-body {
-    transition: background-color 0.3s ease, color 0.3s ease;
+@layer base {
+  body {
+    @apply bg-[#0f1419] text-gray-100 font-sans antialiased;
+    margin: 0;
+    padding: 0;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
 }
 
-.light-mode {
-    background-color: var(--color-bg-light);
-    color: var(--color-text-light);
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
-.dark-mode {
-    background-color: var(--color-bg-dark);
-    color: var(--color-text-dark);
+/* Light Mode Styles */
+.light {
+  background-color: #f3f4f6;
+  color: #1f2937;
 }
 
-.card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-}
-.dark-mode .card:hover {
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+.light nav {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
 }
 
-.fade-in {
-    animation: fadeIn 0.4s ease-in;
-}
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.light nav span,
+.light nav a {
+  color: #1f2937 !important;
 }
 
-.switch {
-    position: relative;
-    display: inline-block;
-    width: 48px;
-    height: 24px;
+.light nav a:hover {
+  color: #3b82f6 !important;
 }
-.switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
+
+.light .bg-\[\#1a1f2e\] {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb;
 }
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: 0.4s;
-    border-radius: 24px;
+
+.light .text-white,
+.light .text-gray-100 {
+  color: #1f2937 !important;
 }
-.slider:before {
-    content: "";
-    position: absolute;
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: 0.4s;
-    border-radius: 50%;
+
+.light .text-gray-400 {
+  color: #6b7280 !important;
 }
-input:checked + .slider {
-    background-color: var(--color-primary);
+
+.light .text-gray-300 {
+  color: #4b5563 !important;
 }
-input:checked + .slider:before {
-    transform: translateX(24px);
+
+.light .text-gray-200 {
+  color: #374151 !important;
+}
+
+.light .text-gray-500 {
+  color: #6b7280 !important;
+}
+
+.light .border-gray-800,
+.light .border-gray-700 {
+  border-color: #e5e7eb !important;
+}
+
+.light .bg-\[\#2d3748\] {
+  background-color: #f9fafb !important;
+  border-color: #e5e7eb !important;
+}
+
+.light .bg-gray-800 {
+  background-color: #f3f4f6 !important;
+}
+
+.light .bg-gray-700 {
+  background-color: #e5e7eb !important;
+}
+
+/* Light mode text colors for specific elements */
+.light h1,
+.light h2,
+.light h3 {
+  color: #1f2937 !important;
+}
+
+.light svg {
+  color: #6b7280 !important;
+}
+
+.light select,
+.light input {
+  background-color: #f9fafb !important;
+  color: #1f2937 !important;
+  border-color: #d1d5db !important;
+}
+
+.light button:not(.bg-blue-500):not(.bg-green-500):not(.bg-red-500):not(.bg-yellow-500):not(.bg-purple-500) svg {
+  color: #6b7280 !important;
 }

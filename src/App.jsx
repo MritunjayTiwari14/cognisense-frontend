@@ -1,21 +1,26 @@
-import { useState } from "react";
-import Navbar from "./components/Navbar";
-import Dashboard from "./components/Dashboard";
-import Analytics from "./components/Analytics";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Dashboard from './pages/Dashboard';
+import Analytics from './pages/Analytics';
+import Insights from './pages/Insights';
+import Settings from './pages/Settings';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState("dashboard");
-  const [isDarkMode, setIsDarkMode] = useState(false);
-
+function App() {
   return (
-    <div className={isDarkMode ? "dark dark-mode min-h-screen" : "light-mode min-h-screen"}>
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab}
-              toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
-              isDarkMode={isDarkMode} />
-      {activeTab === "dashboard" && <Dashboard isDarkMode={isDarkMode} />}
-      {activeTab === "analytics" && <Analytics isDarkMode={isDarkMode} />}
-      {activeTab === "insights" && <div className="p-6">Insights (coming soon)</div>}
-      {activeTab === "settings" && <div className="p-6">Settings (coming soon)</div>}
-    </div>
-  );
+    <Router>
+      <div className="min-h-screen bg-[#0f1419]">
+        <Navbar />
+        <main className="max-w-[1400px] mx-auto px-8 py-8">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/insights" element={<Insights />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
+  )
 }
+
+export default App
