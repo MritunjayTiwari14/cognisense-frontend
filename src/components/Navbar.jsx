@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Activity, Moon, Sun, Bell, User } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(true);
   
   const navItems = [
@@ -36,6 +38,16 @@ const Navbar = () => {
       document.body.style.backgroundColor = '#f3f4f6';
     }
   };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
+  };
+
+  // Hide navbar on auth page
+  if (location.pathname === '/auth') {
+    return null;
+  }
 
   return (
     <nav className={`bg-[${isDarkMode ? '#1a1f2e' : '#f9fafb'}] border-b border-gray-800`}>
@@ -84,9 +96,15 @@ const Navbar = () => {
             <button className="p-2 text-gray-400 hover:text-gray-200 transition-colors">
               <Bell className="w-5 h-5" />
             </button>
-            <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
-              <User className="w-5 h-5" />
-            </div>
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+            >
+              <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center">
+                <User className="w-4 h-4" />
+              </div>
+              <span>Sign out</span>
+            </button>
           </div>
         </div>
       </div>
