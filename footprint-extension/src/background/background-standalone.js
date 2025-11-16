@@ -567,7 +567,42 @@ function countSyllables(word) {
     return matches ? matches.length : 1;
 }
 
+/* eslint-env webextensions */
+/* global chrome */
+
 // === MAIN BACKGROUND SCRIPT ===
+
+// API Configuration
+const API_BASE = 'http://localhost:8000/api/v1';
+let API_TOKEN = null;
+
+// Enhanced logging system
+const Logger = {
+    info: (message, data = null) => {
+        console.log(`[FOOTPRINT-TRACKER] ${message}`, data || '');
+    },
+    warn: (message, data = null) => {
+        console.warn(`[FOOTPRINT-TRACKER] ${message}`, data || '');
+    },
+    error: (message, data = null) => {
+        console.error(`[FOOTPRINT-TRACKER] ${message}`, data || '');
+    },
+    api: (endpoint, method, payload = null, response = null) => {
+        console.group(`[FOOTPRINT-API] ${method} ${endpoint}`);
+        if (payload) {
+            console.log('📤 Request Payload:', JSON.stringify(payload, null, 2));
+        }
+        if (response) {
+            console.log('📥 Response:', JSON.stringify(response, null, 2));
+        }
+        console.groupEnd();
+    }
+};
+
+// Tracking state management
+let isTrackingPaused = false;
+let currentActiveTab = null;
+let tabStartTime = null;
 
 // Track user activity
 let currentSession = {
@@ -581,39 +616,56 @@ let currentSession = {
         negative: 0,
         neutral: 0,
     },
-    productivityScore: 0,
     categories: {},
     insights: [],
+    isPaused: false,
 };
 
 // Initialize extension
 chrome.runtime.onInstalled.addListener(() => {
-    console.log("Digital Footprint Tracker installed");
+    Logger.info('Digital Footprint Tracker installed - initializing...');
     initializeStorage();
 });
 
 // Initialize storage with default settings
 async function initializeStorage() {
     try {
+        Logger.info('Initializing storage and API connection...');
+        
         const settings = await chrome.storage.sync.get([
-            "trackingEnabled",
-            "excludedSites",
-            "userCategories",
-            "privacyMode",
+            'trackingEnabled',
+            'excludedSites',
+            'userCategories',
+            'privacyMode'
         ]);
-
+        
         if (!settings.trackingEnabled) {
             await chrome.storage.sync.set({
                 trackingEnabled: true,
-                excludedSites: ["chrome://", "chrome-extension://", "about:"],
+                excludedSites: ['chrome://', 'chrome-extension://', 'about:'],
                 userCategories: {},
-                privacyMode: false,
+                privacyMode: false
             });
+            Logger.info('Default settings initialized');
         }
-
+        
+        // Restore tracking state
+        const localSettings = await chrome.storage.local.get(['isTrackingPaused']);
+        isTrackingPaused = localSettings.isTrackingPaused || false;
+        currentSession.isPaused = isTrackingPaused;
+        
+        Logger.info(`Tracking state: ${isTrackingPaused ? 'PAUSED' : 'ACTIVE'}`);
+        
+        // Test API connectivity
+        await testAPIConnectivity();
+        
+        // Fetch available categories
+        await fetchCategories();
+        
         startNewSession();
+        
     } catch (error) {
-        console.error("Error initializing storage:", error);
+        Logger.error('Error initializing storage:', error);
     }
 }
 
@@ -630,10 +682,373 @@ function startNewSession() {
             negative: 0,
             neutral: 0,
         },
-        productivityScore: 0,
         categories: {},
         insights: [],
+        isPaused: isTrackingPaused,
     };
+}
+
+// Pause/Play functionality with enhanced logging
+async function pauseTracking() {
+    isTrackingPaused = true;
+    currentSession.isPaused = true;
+    
+    Logger.info('⏸️ TRACKING PAUSED');
+    
+    // Save current tab time if active
+    if (currentActiveTab && tabStartTime) {
+        const timeSpent = Date.now() - tabStartTime;
+        Logger.info(`Saving ${Math.round(timeSpent/1000)}s for current tab before pausing`);
+        await saveTabTime(currentActiveTab, timeSpent);
+        tabStartTime = null;
+    }
+    
+    await chrome.storage.local.set({ isTrackingPaused: true });
+    Logger.info('Pause state saved to storage');
+}
+
+async function resumeTracking() {
+    isTrackingPaused = false;
+    currentSession.isPaused = false;
+    
+    Logger.info('▶️ TRACKING RESUMED');
+    
+    // Start timing current tab if any
+    if (currentActiveTab) {
+        tabStartTime = Date.now();
+        Logger.info(`Started timing for current tab: ${currentActiveTab}`);
+    }
+    
+    await chrome.storage.local.set({ isTrackingPaused: false });
+    Logger.info('Resume state saved to storage');
+}
+
+// Save time spent on a tab with comprehensive logging
+async function saveTabTime(url, timeSpent) {
+    if (!url || isTrackingPaused || timeSpent < 1000) {
+        if (timeSpent < 1000) {
+            Logger.info(`Ignoring short session: ${Math.round(timeSpent/1000)}s on ${url}`);
+        }
+        return; // Ignore < 1 second
+    }
+    
+    try {
+        const domain = new URL(url).hostname;
+        const settings = await chrome.storage.sync.get(['excludedSites']);
+        
+        // Check if site is excluded
+        const isExcluded = settings.excludedSites?.some(excluded => url.includes(excluded));
+        if (isExcluded) {
+            Logger.info(`Skipping excluded site: ${domain}`);
+            return;
+        }
+        
+        Logger.info(`💾 Saving ${Math.round(timeSpent/1000)}s for ${domain}`);
+        
+        // Update session data
+        if (!currentSession.sites[domain]) {
+            currentSession.sites[domain] = {
+                url,
+                domain,
+                visits: 0,
+                timeSpent: 0,
+                category: categorizeUrl(url),
+                lastVisit: Date.now()
+            };
+            Logger.info(`📝 New site tracked: ${domain} (${currentSession.sites[domain].category})`);
+        }
+        
+        currentSession.sites[domain].timeSpent += timeSpent;
+        currentSession.sites[domain].visits += 1;
+        currentSession.sites[domain].lastVisit = Date.now();
+        
+        // Update total time
+        currentSession.totalTime += timeSpent;
+        
+        // Send to API with enhanced logging
+        await sendToAPI({
+            url,
+            domain,
+            timeSpent,
+            category: currentSession.sites[domain].category,
+            title: currentSession.sites[domain].title || '',
+            clicks: 0, // Will be updated by content script
+            keypresses: 0 // Will be updated by content script
+        });
+        
+        await updateStoredData();
+        
+        Logger.info(`✅ Session updated - Total: ${Math.round(currentSession.totalTime/1000)}s, Sites: ${Object.keys(currentSession.sites).length}`);
+        
+    } catch (error) {
+        Logger.error('Error saving tab time:', error);
+    }
+}
+
+// Send data to CogniSense API with comprehensive logging
+async function sendToAPI(data) {
+    try {
+        // Get user ID
+        const userId = await getUserId();
+        if (!userId) {
+            Logger.warn('No user ID available for API request');
+            return;
+        }
+        
+        const endpoint = '/tracking/ingest';
+        const fullUrl = `${API_BASE}${endpoint}`;
+        
+        // Prepare payload according to API documentation
+        const payload = {
+            user_id: userId,
+            url: data.url,
+            title: data.title || '',
+            text: data.text || '',
+            start_ts: (Date.now() - data.timeSpent) / 1000,
+            end_ts: Date.now() / 1000,
+            duration_seconds: data.timeSpent / 1000,
+            clicks: data.clicks || 0,
+            keypresses: data.keypresses || 0,
+            engagement_score: calculateEngagementScore(data.clicks || 0, data.keypresses || 0)
+        };
+        
+        // Log the API request
+        Logger.api(endpoint, 'POST', payload);
+        
+        const response = await fetch(fullUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(API_TOKEN && { 'Authorization': `Bearer ${API_TOKEN}` })
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (response.ok) {
+            const responseData = await response.json();
+            Logger.api(endpoint, 'POST', null, responseData);
+            Logger.info(`Successfully sent tracking data for ${data.url}`);
+            
+            // If we have text content, also send it for content analysis
+            if (data.text && data.text.trim().length > 0) {
+                await analyzeContent(data.text, data.url);
+            }
+            
+        } else {
+            const errorText = await response.text();
+            Logger.error(`API request failed (${response.status}): ${response.statusText}`, errorText);
+        }
+        
+    } catch (error) {
+        Logger.error('Failed to send data to API:', error);
+    }
+}
+
+// Calculate engagement score based on interactions
+function calculateEngagementScore(clicks, keypresses) {
+    // Simple engagement score calculation
+    const totalInteractions = clicks + keypresses;
+    return Math.min(1.0, totalInteractions / 100); // Max score of 1.0
+}
+
+// Analyze content using the content analysis endpoint
+async function analyzeContent(text, url) {
+    try {
+        const endpoint = '/content/analyze';
+        const fullUrl = `${API_BASE}${endpoint}`;
+        
+        const payload = {
+            text: text.substring(0, 5000), // Limit text length
+            url: url,
+            analyze_sentiment: true,
+            analyze_category: true,
+            analyze_emotions: true
+        };
+        
+        Logger.api(endpoint, 'POST', payload);
+        
+        const response = await fetch(fullUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(API_TOKEN && { 'Authorization': `Bearer ${API_TOKEN}` })
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (response.ok) {
+            const analysisData = await response.json();
+            Logger.api(endpoint, 'POST', null, analysisData);
+            Logger.info(`Content analysis completed for ${url}`);
+            
+            // Store analysis results
+            await storeContentAnalysis(url, analysisData);
+            
+        } else {
+            const errorText = await response.text();
+            Logger.warn(`Content analysis failed (${response.status}): ${response.statusText}`, errorText);
+        }
+        
+    } catch (error) {
+        Logger.warn('Content analysis request failed:', error);
+    }
+}
+
+// Store content analysis results
+async function storeContentAnalysis(url, analysisData) {
+    try {
+        const domain = new URL(url).hostname;
+        
+        if (currentSession.sites[domain]) {
+            currentSession.sites[domain].contentAnalysis = {
+                sentiment: analysisData.sentiment,
+                category: analysisData.category,
+                emotions: analysisData.emotions,
+                analyzedAt: Date.now()
+            };
+            
+            Logger.info(`Stored analysis for ${domain}:`, {
+                sentiment: analysisData.sentiment?.label,
+                category: analysisData.category?.primary,
+                dominantEmotion: analysisData.emotions?.dominant?.label
+            });
+        }
+        
+    } catch (error) {
+        Logger.error('Failed to store content analysis:', error);
+    }
+}
+
+// Test API connectivity
+async function testAPIConnectivity() {
+    try {
+        const endpoint = '/ping';
+        const fullUrl = `${API_BASE}${endpoint}`;
+        
+        Logger.info('Testing API connectivity...');
+        
+        const response = await fetch(fullUrl);
+        
+        if (response.ok) {
+            const data = await response.json();
+            Logger.api(endpoint, 'GET', null, data);
+            Logger.info('API connectivity test successful');
+            return true;
+        } else {
+            Logger.error(`API connectivity test failed (${response.status}): ${response.statusText}`);
+            return false;
+        }
+        
+    } catch (error) {
+        Logger.error('API connectivity test failed:', error);
+        return false;
+    }
+}
+
+// Get available categories from API
+async function fetchCategories() {
+    try {
+        const endpoint = '/categories/labels';
+        const fullUrl = `${API_BASE}${endpoint}`;
+        
+        Logger.info('Fetching available categories...');
+        
+        const response = await fetch(fullUrl);
+        
+        if (response.ok) {
+            const data = await response.json();
+            Logger.api(endpoint, 'GET', null, data);
+            Logger.info(`Fetched ${data.total} categories`);
+            return data.categories;
+        } else {
+            Logger.warn(`Failed to fetch categories (${response.status}): ${response.statusText}`);
+            return null;
+        }
+        
+    } catch (error) {
+        Logger.warn('Failed to fetch categories:', error);
+        return null;
+    }
+}
+
+// Get user ID (implement proper auth as needed)
+async function getUserId() {
+    try {
+        const stored = await chrome.storage.local.get(['userId']);
+        if (!stored.userId) {
+            // Generate a temporary user ID
+            const userId = 'user_' + Date.now();
+            await chrome.storage.local.set({ userId });
+            return userId;
+        }
+        return stored.userId;
+    } catch {
+        return 'user_default';
+    }
+}
+
+// Get today's stats for popup
+async function getTodayStats() {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Get stored data
+        const stored = await chrome.storage.local.get(['sessions', 'todayTotal']);
+        const sessions = stored.sessions || [];
+        
+        // Filter today's sessions
+        const todaySessions = sessions.filter(session => 
+            session.startTime >= today.getTime()
+        );
+        
+        // Add current session if active
+        if (currentSession.startTime >= today.getTime()) {
+            todaySessions.push(currentSession);
+        }
+        
+        // Calculate aggregated stats
+        let totalTime = 0;
+        const sitesMap = {};
+        
+        todaySessions.forEach(session => {
+            totalTime += session.totalTime || 0;
+            
+            Object.entries(session.sites || {}).forEach(([domain, siteData]) => {
+                if (!sitesMap[domain]) {
+                    sitesMap[domain] = {
+                        domain,
+                        totalTime: 0,
+                        visits: 0,
+                        category: siteData.category || 'other'
+                    };
+                }
+                sitesMap[domain].totalTime += siteData.timeSpent || 0;
+                sitesMap[domain].visits += siteData.visits || 0;
+            });
+        });
+        
+        // Convert to array and sort
+        const topSites = Object.values(sitesMap)
+            .sort((a, b) => b.totalTime - a.totalTime)
+            .slice(0, 5);
+        
+        return {
+            totalTime: Math.round(totalTime / 1000), // Convert to seconds
+            topSites,
+            isPaused: isTrackingPaused,
+            sessionCount: todaySessions.length
+        };
+        
+    } catch (error) {
+        console.error('Error getting today stats:', error);
+        return {
+            totalTime: 0,
+            topSites: [],
+            isPaused: isTrackingPaused,
+            sessionCount: 0
+        };
+    }
 }
 
 // Track tab navigation
@@ -647,17 +1062,31 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 });
 
 // Track tab updates
+// Track tab updates
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-    if (changeInfo.status === "complete" && tab.url) {
+    if (isTrackingPaused) return;
+    
+    if (changeInfo.status === 'complete' && tab.url) {
         try {
+            // Save time for previous URL if it was different
+            if (currentActiveTab && currentActiveTab !== tab.url && tabStartTime) {
+                const timeSpent = Date.now() - tabStartTime;
+                await saveTabTime(currentActiveTab, timeSpent);
+            }
+            
+            // Update current tab
+            currentActiveTab = tab.url;
+            tabStartTime = Date.now();
+            
             await trackPageVisit(tab.url, tab.title);
             await requestContentAnalysis(tabId);
         } catch (error) {
-            console.error("Error tracking tab update:", error);
+            console.error('Error tracking tab update:', error);
         }
     }
 });
 
+// Get today's stats for popup
 // Request content analysis from content script
 async function requestContentAnalysis(tabId) {
     try {
@@ -745,38 +1174,75 @@ async function trackPageVisit(url, title = "") {
 // Handle messages from content script
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     try {
+        Logger.info(`📬 Received message: ${message.type}`, sender?.tab?.url || 'popup');
+        
         switch (message.type) {
-            case "CONTENT_ANALYSIS":
-                await processContentAnalysis(message.data, sender.tab);
+            case 'CONTENT_ANALYSIS':
+                if (!isTrackingPaused) {
+                    await processContentAnalysis(message.data, sender.tab);
+                }
                 break;
-
-            case "USER_INTERACTION":
-                await trackUserInteraction(message.data, sender.tab);
+                
+            case 'USER_INTERACTION':
+                if (!isTrackingPaused) {
+                    await trackUserInteraction(message.data, sender.tab);
+                }
                 break;
-
-            case "GET_SESSION_DATA":
+                
+            case 'GET_SESSION_DATA':
                 sendResponse(await getSessionData());
                 break;
-
-            case "GET_ANALYTICS":
+                
+            case 'GET_ANALYTICS':
                 sendResponse(await getAnalytics(message.timeframe));
                 break;
-
-            case "UPDATE_SETTINGS":
+                
+            case 'UPDATE_SETTINGS':
                 await updateSettings(message.settings);
                 break;
-
-            case "EXPORT_DATA":
+                
+            case 'EXPORT_DATA':
                 sendResponse(await exportData());
                 break;
-
+                
+            case 'getStatus': {
+                const status = { paused: isTrackingPaused };
+                Logger.info(`Status requested: ${isTrackingPaused ? 'PAUSED' : 'ACTIVE'}`);
+                sendResponse(status);
+                break;
+            }
+                
+            case 'pauseTracking': {
+                await pauseTracking();
+                const pauseResponse = { success: true, paused: true };
+                Logger.info('✅ Pause request completed');
+                sendResponse(pauseResponse);
+                break;
+            }
+                
+            case 'resumeTracking': {
+                await resumeTracking();
+                const resumeResponse = { success: true, paused: false };
+                Logger.info('✅ Resume request completed');
+                sendResponse(resumeResponse);
+                break;
+            }
+                
+            case 'getTodayStats': {
+                const stats = await getTodayStats();
+                Logger.info(`📊 Stats requested - Total: ${Math.round(stats.totalTime/1000)}s, Sites: ${stats.sites.length}`);
+                sendResponse(stats);
+                break;
+            }
+                
             default:
-                console.warn("Unknown message type:", message.type);
+                Logger.warn('Unknown message type:', message.type);
         }
     } catch (error) {
-        console.error("Error handling message:", error);
+        Logger.error('Error handling message:', error);
+        sendResponse({ error: error.message });
     }
-
+    
     return true; // Keep channel open for async response
 });
 
@@ -1145,3 +1611,7 @@ setInterval(async () => {
 }, 60000); // Run every minute
 
 console.log("Digital Footprint Tracker background script loaded");
+
+// Initialize when script loads
+Logger.info('🚀 Digital Footprint Tracker background script initialized');
+Logger.info('📡 API Base URL:', API_BASE);

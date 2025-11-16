@@ -1,17 +1,9 @@
 /* eslint-env browser */
 /* global chrome */
 import React, { useEffect, useState } from "react";
-import "./popup.css";
-import {
-    formatDuration,
-    calculateProductivityScore,
-    getTopSites,
-    calculateEmotionalBalance,
-} from "../utils/analytics.js";
-import {
-    getCategoryDisplayName,
-    getCategoryIcon,
-} from "../utils/categories.js";
+import "./popup-simple.css";
+import { formatDuration } from "../utils/analytics.js";
+import { getCategoryDisplayName, getCategoryIcon } from "../utils/categories.js";
 
 function secToMin(seconds) {
     return Math.round(seconds / 60);
@@ -20,22 +12,13 @@ function secToMin(seconds) {
 const isChrome = typeof chrome !== "undefined" && !!chrome.runtime;
 
 const Popup = () => {
-    const [todayMin, setTodayMin] = useState(0);
+    const [totalTimeSeconds, setTotalTimeSeconds] = useState(0);
     const [paused, setPaused] = useState(false);
-    const [engScore, setEngScore] = useState(0);
-    const [productivityScore, setProductivityScore] = useState(0);
-    const [emotionalBalance, setEmotionalBalance] = useState({
-        score: 50,
-        positive: 0,
-        negative: 0,
-        neutral: 0,
-    });
     const [topSites, setTopSites] = useState([]);
     const [currentSite, setCurrentSite] = useState({
         category: "other",
         domain: "",
     });
-    const [insights, setInsights] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -65,12 +48,11 @@ const Popup = () => {
                         (tabs) => {
                             if (tabs[0] && tabs[0].url) {
                                 try {
-                                    const domain = new URL(tabs[0].url)
-                                        .hostname;
+                                    const domain = new URL(tabs[0].url).hostname;
                                     setCurrentSite({
                                         domain,
-                                        category: "other",
-                                    }); // Will be updated with actual category
+                                        category: "other", // Will be updated with actual category
+                                    });
                                 } catch {
                                     setCurrentSite({
                                         domain: "Unknown",
@@ -85,82 +67,16 @@ const Popup = () => {
                 }
             }
 
-            // Get today's comprehensive analytics
+            // Get today's stats
             if (isChrome) {
                 try {
                     chrome.runtime.sendMessage(
                         { type: "getTodayStats" },
                         (resp) => {
-                            if (resp && resp.events && resp.analyses) {
-                                const { events, analyses } = resp;
-
-                                // Calculate basic metrics
-                                const startDay = new Date();
-                                startDay.setHours(0, 0, 0, 0);
-
-                                let totalSeconds = 0;
-                                let totalClicks = 0,
-                                    totalKeys = 0,
-                                    totalScrolls = 0;
-                                const sessionEvents = [];
-
-                                events.forEach((e) => {
-                                    if (
-                                        e.type === "session_end" &&
-                                        e.ts >= startDay.getTime()
-                                    ) {
-                                        totalSeconds += e.duration || 0;
-                                        sessionEvents.push(e);
-                                    }
-
-                                    if (
-                                        e.type === "engagement" &&
-                                        e.ts >= startDay.getTime()
-                                    ) {
-                                        totalClicks +=
-                                            (e.data && e.data.clicks) || 0;
-                                        totalKeys +=
-                                            (e.data && e.data.keys) || 0;
-                                        totalScrolls +=
-                                            (e.data && e.data.scrolls) || 0;
-                                    }
-                                });
-
-                                setTodayMin(secToMin(totalSeconds));
-                                setEngScore(
-                                    Math.min(
-                                        100,
-                                        Math.round(
-                                            (totalClicks +
-                                                totalKeys +
-                                                totalScrolls) /
-                                                10
-                                        )
-                                    )
-                                );
-
-                                // Calculate productivity score
-                                const prodScore =
-                                    calculateProductivityScore(sessionEvents);
-                                setProductivityScore(prodScore);
-
-                                // Get top sites
-                                const sites = getTopSites(sessionEvents, 3);
-                                setTopSites(sites);
-
-                                // Calculate emotional balance
-                                const emoBalance =
-                                    calculateEmotionalBalance(analyses);
-                                setEmotionalBalance(emoBalance);
-
-                                // Generate insights
-                                const newInsights = generateInsights(
-                                    totalSeconds,
-                                    prodScore,
-                                    emoBalance,
-                                    sites
-                                );
-                                setInsights(newInsights);
+                            if (resp) {
+                                setTotalTimeSeconds(resp.totalTime || 0);
+                                setTopSites(resp.topSites || []);
+                                setPaused(resp.isPaused || false);
                             }
                             setLoading(false);
                         }
@@ -171,29 +87,18 @@ const Popup = () => {
                 }
             } else {
                 // Dev fallback
-                setTodayMin(120);
-                setEngScore(75);
-                setProductivityScore(60);
-                setEmotionalBalance({
-                    score: 65,
-                    positive: 40,
-                    negative: 25,
-                    neutral: 35,
-                });
+                setTotalTimeSeconds(7200); // 2 hours
                 setTopSites([
                     {
                         domain: "github.com",
-                        totalTime: 3600,
+                        totalTime: 3600000, // 1 hour in milliseconds
                         category: "productivity",
                     },
                     {
-                        domain: "youtube.com",
-                        totalTime: 2400,
+                        domain: "youtube.com", 
+                        totalTime: 2400000, // 40 minutes in milliseconds
                         category: "entertainment",
                     },
-                ]);
-                setInsights([
-                    "Consider taking breaks between focused work sessions",
                 ]);
                 setLoading(false);
             }
@@ -202,68 +107,22 @@ const Popup = () => {
         loadData();
     }, []);
 
-    // Generate personalized insights
-    const generateInsights = (totalSeconds, prodScore, emoBalance, sites) => {
-        const insights = [];
-        const totalHours = totalSeconds / 3600;
-
-        // Time-based insights
-        if (totalHours > 6) {
-            insights.push(
-                "💡 You've spent significant time online today. Consider taking regular breaks."
-            );
-        } else if (totalHours < 2) {
-            insights.push(
-                "🌟 Light usage day! Good balance with offline activities."
-            );
+    // Handle pause/resume functionality
+    const handlePauseResume = async () => {
+        if (!isChrome) {
+            setPaused(p => !p);
+            return;
         }
-
-        // Productivity insights
-        if (prodScore > 80) {
-            insights.push(
-                "🚀 Excellent productivity score! Keep up the focused work."
-            );
-        } else if (prodScore < 40) {
-            insights.push(
-                "⚡ Consider time-blocking productive tasks to improve focus."
-            );
-        }
-
-        // Emotional balance insights
-        if (emoBalance.score < 30) {
-            insights.push(
-                "😊 Try balancing negative content with more uplifting material."
-            );
-        } else if (emoBalance.score > 70) {
-            insights.push(
-                "🌈 Great emotional balance in your content consumption!"
-            );
-        }
-
-        // Site diversity insights
-        const entertainmentTime =
-            sites.find((s) => s.category === "entertainment")?.totalTime || 0;
-        const socialTime =
-            sites.find((s) => s.category === "social")?.totalTime || 0;
-
-        if (entertainmentTime + socialTime > totalSeconds * 0.6) {
-            insights.push(
-                "🎯 High entertainment/social usage. Try incorporating more educational content."
-            );
-        }
-
-        return insights.slice(0, 2); // Show max 2 insights
-    };
-
-    const togglePause = () => {
-        if (!isChrome) return setPaused((p) => !p);
-        const action = paused ? "resume" : "pause";
+        
         try {
-            chrome.runtime.sendMessage({ type: action }, (resp) => {
-                setPaused(resp?.paused || false);
+            const messageType = paused ? "resumeTracking" : "pauseTracking";
+            chrome.runtime.sendMessage({ type: messageType }, (response) => {
+                if (response && response.success) {
+                    setPaused(response.paused);
+                }
             });
         } catch (e) {
-            console.warn("togglePause failed:", e);
+            console.warn("Failed to toggle tracking:", e);
         }
     };
 
@@ -290,26 +149,13 @@ const Popup = () => {
                 );
             }
         } catch (err) {
-            console.warn("openOptions failed, falling back:", err);
-            try {
-                window.open(
-                    chrome.runtime.getURL("options/index.html"),
-                    "_blank"
-                );
-            } catch (_) {}
+            console.warn("Failed to open options:", err);
         }
     };
 
     const openDashboard = () => {
-        if (!isChrome) {
-            window.open("https://your-dashboard-website.com", "_blank");
-            return;
-        }
-        try {
-            chrome.tabs.create({ url: "https://your-dashboard-website.com" });
-        } catch (e) {
-            console.warn("openDashboard failed:", e);
-        }
+        // For now, just open the options page as dashboard
+        openOptions();
     };
 
     if (loading) {
@@ -329,8 +175,8 @@ const Popup = () => {
     return (
         <div className="popup">
             <header className="pf-header">
-                <div className="logo">🦶</div>
-                <h1>Digital Footprint</h1>
+                <div className="logo">⏱️</div>
+                <h1>Time Tracker</h1>
                 <div className="status-indicator">
                     {paused ? "⏸️ Paused" : "🟢 Active"}
                 </div>
@@ -350,54 +196,12 @@ const Popup = () => {
                 </div>
             </div>
 
-            <div className="metrics-grid">
-                <div className="metric-card time">
-                    <div className="metric-icon">⏱️</div>
-                    <div className="metric-content">
-                        <div className="metric-value">{todayMin}m</div>
-                        <div className="metric-label">Today</div>
-                    </div>
-                </div>
-
-                <div className="metric-card productivity">
-                    <div className="metric-icon">📈</div>
-                    <div className="metric-content">
-                        <div className="metric-value">{productivityScore}%</div>
-                        <div className="metric-label">Productive</div>
-                    </div>
-                </div>
-
-                <div className="metric-card engagement">
-                    <div className="metric-icon">🎯</div>
-                    <div className="metric-content">
-                        <div className="metric-value">{engScore}</div>
-                        <div className="metric-label">Engagement</div>
-                    </div>
-                </div>
-
-                <div className="metric-card emotional">
-                    <div className="metric-icon">😊</div>
-                    <div className="metric-content">
-                        <div className="metric-value">
-                            {emotionalBalance.score}
-                        </div>
-                        <div className="metric-label">Mood Balance</div>
-                    </div>
+            <div className="time-display">
+                <div className="main-time">
+                    <div className="time-value">{formatDuration(totalTimeSeconds * 1000)}</div>
+                    <div className="time-label">Today's Total</div>
                 </div>
             </div>
-
-            {insights.length > 0 && (
-                <div className="insights-section">
-                    <h3>💡 Insights</h3>
-                    <div className="insights-list">
-                        {insights.map((insight, idx) => (
-                            <div key={idx} className="insight-item">
-                                {insight}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
 
             {topSites.length > 0 && (
                 <div className="top-sites-section">
@@ -423,7 +227,7 @@ const Popup = () => {
             )}
 
             <div className="controls">
-                <button className="primary" onClick={togglePause}>
+                <button className="primary" onClick={handlePauseResume}>
                     {paused ? "▶️ Resume Tracking" : "⏸️ Pause Tracking"}
                 </button>
 
@@ -438,7 +242,7 @@ const Popup = () => {
             </div>
 
             <footer className="pf-footer">
-                <small>AI-powered insights • Privacy-focused tracking</small>
+                <small>Simple time tracking • Privacy-focused</small>
             </footer>
         </div>
     );
