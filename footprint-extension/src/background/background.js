@@ -1,10 +1,7 @@
-// background.js
-
 let activeTabId = null;
 let activeStart = null;
 let activeUrl = null;
 let paused = false;
-let isSwitching = false; // NEW: Lock to prevent race conditions
 
 // Dummy endpoints
 const SESSION_API = "https://dummy.server.com/session";
@@ -36,7 +33,7 @@ function persistEvent(event) {
 // Backend POST
 async function sendSessionToBackend(url, start, end) {
   const duration = end - start;
-  // ... (rest of function is unchanged)
+
   try {
     await fetch(SESSION_API, {
       method: "POST",
@@ -54,7 +51,6 @@ async function sendSessionToBackend(url, start, end) {
 }
 
 async function sendHtmlToBackend(url, htmlText) {
-  // ... (rest of function is unchanged)
   try {
     await fetch(HTML_API, {
       method: "POST",
@@ -69,227 +65,113 @@ async function sendHtmlToBackend(url, htmlText) {
 // Guaranteed contentScript injection before request
 function fetchPageText(tabId) {
   return new Promise((resolve) => {
-    try {
-      chrome.scripting.executeScript(
-        {
-          target: { tabId },
-          files: ["content/contentScript.js"]
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            console.warn("Script injection error:", chrome.runtime.lastError.message);
-            resolve({ text: "", engagement: null }); // Fail gracefully
-            return;
-          }
-          
-          chrome.tabs.sendMessage(
-            tabId,
-            { type: "request_full_text" },
-            (resp) => {
-              if (chrome.runtime.lastError) {
-                 console.warn("Message send error:", chrome.runtime.lastError.message);
-                 resolve({ text: "", engagement: null }); // Fail gracefully
-                 return;
-              }
-              // CHANGED: Resolve with an object
-              resolve({
-                text: resp?.text || "",
-                engagement: resp?.engagement || null
-              });
-            }
-          );
-        }
-      );
-    } catch (e) {
-      console.warn("fetchPageText error:", e);
-      resolve({ text: "", engagement: null }); // Fail gracefully
-    }
+    chrome.scripting.executeScript(
+      {
+        target: { tabId },
+        files: ["content/contentScript.js"]
+      },
+      () => {
+        chrome.tabs.sendMessage(
+          tabId,
+          { type: "request_full_text" },
+          (resp) => resolve(resp?.text || "")
+        );
+      }
+    );
   });
 }
 
 // Stop active session
 async function stopActiveTimer() {
-  if (!activeTabId || !activeStart || !activeUrl) {
-    return; // No active session to stop
-  }
+  if (!activeTabId || !activeStart || !activeUrl) return;
 
-  // CHANGED: Capture state and clear *immediately* to prevent race conditions
   const end = Date.now();
   const tabId = activeTabId;
   const url = activeUrl;
-  const start = activeStart;
 
-  activeTabId = null;
-  activeStart = null;
-  activeUrl = null;
+  const htmlText = await fetchPageText(tabId);
 
-  // Now perform async operations with the captured state
-  const { text: htmlText, engagement } = await fetchPageText(tabId);
-
-  sendSessionToBackend(url, start, end);
-  if (htmlText) { // Only send if we got text
-    sendHtmlToBackend(url, htmlText);
-  }
-
-  // NEW: Persist the final engagement data collected
-  if (engagement && (engagement.clicks || engagement.keys || engagement.scrolls)) {
-    persistEvent({
-      type: "engagement",
-      url: url,
-      data: engagement,
-      ts: end // Use the session end time
-    });
-  }
+  sendSessionToBackend(url, activeStart, end);
+  sendHtmlToBackend(url, htmlText);
 
   persistEvent({
     type: "session_end",
     url,
-    duration: end - start,
+    duration: end - activeStart,
     ts: end
   });
+
+  activeTabId = null;
+  activeStart = null;
+  activeUrl = null;
 }
 
-// CHANGED: Refactored to be async and use the isSwitching lock
-async function handleSwitch(tab) {
-  if (isSwitching) return; // Don't run if a switch is already processing
-  isSwitching = true;
+// Start new session
+function handleSwitch(tab) {
+  stopActiveTimer();
 
-  await stopActiveTimer(); // Wait for the previous session to fully stop
-
-  // If tab is null or invalid (e.g., window blurred), just stop and exit
-  if (!tab || !tab.id || !tab.url) {
-    isSwitching = false;
+  if (!tab || !tab.url) return;
+  if (tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://"))
     return;
-  }
-  
-  const newUrl = tab.url;
-  if (newUrl.startsWith("chrome://") || newUrl.startsWith("chrome-extension://")) {
-    isSwitching = false;
-    return;
-  }
 
-  // CHANGED: Switched to async/await for storage.get
-  try {
-    const res = await chrome.storage.local.get({ settings: { excludeList: [] } });
+  chrome.storage.local.get({ settings: { excludeList: [] } }, (res) => {
     const excludeList = res.settings.excludeList || [];
-    if (excludeList.some((e) => newUrl.includes(e))) {
-      isSwitching = false;
-      return;
-    }
+    if (excludeList.some((e) => tab.url.includes(e))) return;
 
-    // All checks passed, start new session
     activeTabId = tab.id;
-    activeUrl = newUrl;
+    activeUrl = tab.url;
     activeStart = Date.now();
 
     persistEvent({
       type: "session_start",
-      url: newUrl,
-      ts: activeStart
+      url: tab.url,
+      ts: Date.now()
     });
-  } catch (e) {
-    console.warn("Error in handleSwitch:", e);
-  }
-
-  isSwitching = false; // Release the lock
+  });
 }
 
 // Listeners
-// CHANGED: All listeners are now async to correctly await handleSwitch
 chrome.tabs.onActivated.addListener(async (info) => {
   if (paused) return;
-  try {
-    const tab = await chrome.tabs.get(info.tabId);
-    await handleSwitch(tab);
-  } catch (e) {
-    console.warn("onActivated error:", e);
-    isSwitching = false; // Ensure lock is released on error
-  }
+  const tab = await chrome.tabs.get(info.tabId);
+  handleSwitch(tab);
 });
 
-chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (paused) return;
-  
-  try {
-    if (windowId === chrome.windows.WINDOW_ID_NONE) {
-      await handleSwitch(null); // Window blurred, stop timer
-    } else {
-      const tabs = await chrome.tabs.query({ active: true, windowId });
-      if (tabs[0]) {
-        await handleSwitch(tabs[0]);
-      } else {
-        await handleSwitch(null); // No active tab found, stop timer
-      }
-    }
-  } catch (e) {
-     console.warn("onFocusChanged error:", e);
-     isSwitching = false; // Ensure lock is released on error
-  }
-});
-
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+chrome.windows.onFocusChanged.addListener((windowId) => {
   if (paused) return;
 
-  // Only handle updates for the *currently active* tab
-  if (tabId === activeTabId && changeInfo.status === "complete") {
-    await handleSwitch(tab);
-  }
+  if (windowId === chrome.windows.WINDOW_ID_NONE) stopActiveTimer();
+  else
+    chrome.tabs.query({ active: true, windowId }, (tabs) => {
+      if (tabs[0]) handleSwitch(tabs[0]);
+    });
 });
 
-// NEW: Interval to periodically flush engagement from long-lived active tabs
-setInterval(async () => {
-  if (paused || !activeTabId || !activeUrl) return;
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (paused) return;
 
-  try {
-    // We use a new message type to avoid resetting page text
-    chrome.tabs.sendMessage(
-      activeTabId,
-      { type: "request_interim_engagement" },
-      (resp) => {
-        if (chrome.runtime.lastError || !resp?.engagement) {
-          return;
-        }
-        
-        const data = resp.engagement;
-        if (data.clicks || data.keys || data.scrolls) {
-          persistEvent({
-            type: "engagement",
-            url: activeUrl, // Use the stored activeUrl
-            data: data,
-            ts: Date.now()
-          });
-        }
-      }
-    );
-  } catch (e) {
-    console.warn("Interim engagement flush error:", e);
-  }
-}, 30000); // Flush every 30 seconds
+  if (tabId === activeTabId && changeInfo.status === "complete")
+    handleSwitch(tab);
+});
 
 // Message handlers
-// CHANGED: Using async/await for pause/resume
 chrome.runtime.onMessage.addListener((msg, sender, sendResp) => {
-  if (!msg?.type) return true; // Keep channel open for async response if needed
+  if (!msg?.type) return;
 
   if (msg.type === "pause") {
-    (async () => {
-      paused = true;
-      await stopActiveTimer();
-      sendResp({ paused: true });
-    })();
-    return true; // Indicates async response
+    paused = true;
+    stopActiveTimer();
+    sendResp({ paused: true });
+    return true;
   }
 
   if (msg.type === "resume") {
-    (async () => {
-      paused = false;
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs[0]) {
-        await handleSwitch(tabs[0]);
-      }
-      sendResp({ paused: false });
-    })();
-    return true; // Indicates async response
+    paused = false;
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) handleSwitch(tabs[0]);
+    });
+    sendResp({ paused: false });
+    return true;
   }
 
   if (msg.type === "getStatus") {
@@ -298,27 +180,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResp) => {
   }
 
   if (msg.type === "engagement") {
-    // This is for interim data
-    if (sender.tab?.url === activeUrl) {
-      persistEvent({
-        type: "engagement",
-        url: sender.tab.url,
-        data: msg.data,
-        ts: Date.now()
-      });
-    }
+    persistEvent({
+      type: "engagement",
+      url: sender.tab?.url || "",
+      data: msg.data,
+      ts: Date.now()
+    });
     sendResp({ ok: true });
     return true;
   }
 
+  // NEW: handle auto-sent page_html
   if (msg.type === "page_html") {
-    // Only send if the page is from the active tab
-    if (sender.tab?.url === activeUrl) {
-       sendHtmlToBackend(sender.tab.url, msg.text);
-    }
+    sendHtmlToBackend(sender.tab?.url || "", msg.text);
     sendResp({ ok: true });
     return true;
   }
-  
-  return true; // Default
 });
