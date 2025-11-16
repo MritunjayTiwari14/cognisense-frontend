@@ -20,13 +20,13 @@
     try {
       chrome.runtime.sendMessage(msg, (resp) => {
         if (chrome.runtime.lastError) {
-          cb?.({ ok: false, error: chrome.runtime.lastError.message });
+          cb?.({ ok: false });
           return;
         }
         cb?.(resp);
       });
     } catch (err) {
-      cb?.({ ok: false, error: err.message });
+      cb?.({ ok: false });
     }
   }
 
@@ -61,8 +61,14 @@
     { passive: true }
   );
 
-  // REMOVED: The 10-second setInterval flush is no longer needed.
-  // The background script now controls when data is flushed.
+  // Flush engagement every 10s
+  setInterval(() => {
+    if (!engagement.clicks && !engagement.keys && !engagement.scrolls) return;
+
+    safeSendMessage({ type: "engagement", data: engagement }, () => {
+      engagement = { clicks: 0, keys: 0, scrolls: 0 };
+    });
+  }, 10000);
 
   // Extract page text
   function extractPageText() {
@@ -73,7 +79,7 @@
     }
   }
 
-  // Auto-send initial page text
+  // Auto-send HTML when page loads
   safeSendMessage({
     type: "page_html",
     text: extractPageText()
@@ -84,22 +90,8 @@
     if (!msg?.type) return;
 
     if (msg.type === "request_full_text") {
-      // CHANGED: Send engagement data along with text
-      sendResp({
-        text: extractPageText(),
-        engagement: engagement
-      });
-      // Reset engagement after this *final* flush
-      engagement = { clicks: 0, keys: 0, scrolls: 0 };
-      return true; // Indicates async response
-    }
-    
-    // NEW: Handle interim requests from the background script
-    if (msg.type === "request_interim_engagement") {
-      const dataToSend = engagement;
-      engagement = { clicks: 0, keys: 0, scrolls: 0 }; // Reset
-      sendResp({ engagement: dataToSend });
-      return true; // Indicates async response
+      sendResp({ text: extractPageText() });
+      return true;
     }
   });
 })();
