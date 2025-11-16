@@ -1,64 +1,97 @@
-// src/content/contentScript.js
+// content/contentScript.js
 (function () {
-  'use strict';
+  "use strict";
+
   let engagement = { clicks: 0, keys: 0, scrolls: 0 };
+
   function isSensitiveInput(el) {
     if (!el) return false;
-    const tag = (el.tagName || '').toLowerCase();
-    const type = (el.type || '').toLowerCase();
-    const ac = (el.autocomplete || '').toLowerCase();
-    if (tag === 'input' && ['password', 'email', 'tel', 'number'].includes(type)) return true;
-    if (ac && ac.includes('cc-')) return true;
+    const tag = (el.tagName || "").toLowerCase();
+    const type = (el.type || "").toLowerCase();
+    const ac = (el.autocomplete || "").toLowerCase();
+
+    if (tag === "input" && ["password", "email", "tel", "number"].includes(type))
+      return true;
+    if (ac.includes("cc-")) return true;
     return false;
   }
 
   function safeSendMessage(msg, cb) {
     try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
-        if (typeof cb === 'function') cb({ ok: false, reason: 'no-chrome' });
-        return;
-      }
-      chrome.runtime.sendMessage(msg, function (resp) {
+      chrome.runtime.sendMessage(msg, (resp) => {
         if (chrome.runtime.lastError) {
-          if (typeof cb === 'function') cb({ ok: false, reason: chrome.runtime.lastError.message });
-        } else {
-          if (typeof cb === 'function') cb(resp);
+          cb?.({ ok: false });
+          return;
         }
+        cb?.(resp);
       });
     } catch (err) {
-      if (typeof cb === 'function') cb({ ok: false, reason: err && err.message });
+      cb?.({ ok: false });
     }
   }
 
-  document.addEventListener('click', (ev) => { try { if (!isSensitiveInput(ev.target)) engagement.clicks++; } catch (e) {} }, { passive: true });
-  document.addEventListener('keydown', (ev) => { try { const a = document.activeElement; if (!isSensitiveInput(a) && ev.key && ev.key.length === 1) engagement.keys++; } catch (e) {} }, { passive: true });
+  // Engagement listeners
+  document.addEventListener(
+    "click",
+    (ev) => {
+      if (!isSensitiveInput(ev.target)) engagement.clicks++;
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    "keydown",
+    (ev) => {
+      const active = document.activeElement;
+      if (!isSensitiveInput(active) && ev.key?.length === 1) engagement.keys++;
+    },
+    { passive: true }
+  );
+
   let lastScroll = 0;
-  window.addEventListener('scroll', () => { try { const now = Date.now(); if (now - lastScroll > 300) { engagement.scrolls++; lastScroll = now; } } catch (e) {} }, { passive: true });
+  window.addEventListener(
+    "scroll",
+    () => {
+      const now = Date.now();
+      if (now - lastScroll > 300) {
+        engagement.scrolls++;
+        lastScroll = now;
+      }
+    },
+    { passive: true }
+  );
 
-  const FLUSH_MS = 10000;
+  // Flush engagement every 10s
   setInterval(() => {
-    try {
-      if (!engagement.clicks && !engagement.keys && !engagement.scrolls) return;
-      const payload = { type: 'engagement', data: engagement };
-      safeSendMessage(payload, (resp) => {
-        // reset counts regardless to avoid runaway; could queue instead
-        engagement = { clicks: 0, keys: 0, scrolls: 0 };
-      });
-    } catch (e) { /* ignore */ }
-  }, FLUSH_MS);
+    if (!engagement.clicks && !engagement.keys && !engagement.scrolls) return;
 
-  try {
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
-      chrome.runtime.onMessage.addListener(function (msg, sender, sendResp) {
-        try {
-          if (msg && msg.type === 'requestPageText') {
-            let text = '';
-            try { text = document.body && document.body.innerText ? String(document.body.innerText).slice(0, 50000) : ''; } catch (e) { text = ''; }
-            try { sendResp({ text }); } catch (e) { /* ignore */ }
-            return true;
-          }
-        } catch (e) {}
-      });
+    safeSendMessage({ type: "engagement", data: engagement }, () => {
+      engagement = { clicks: 0, keys: 0, scrolls: 0 };
+    });
+  }, 10000);
+
+  // Extract page text
+  function extractPageText() {
+    try {
+      return document.body?.innerText?.slice(0, 50000) || "";
+    } catch {
+      return "";
     }
-  } catch (e) {}
+  }
+
+  // Auto-send HTML when page loads
+  safeSendMessage({
+    type: "page_html",
+    text: extractPageText()
+  });
+
+  // Listen for background requests
+  chrome.runtime.onMessage.addListener((msg, sender, sendResp) => {
+    if (!msg?.type) return;
+
+    if (msg.type === "request_full_text") {
+      sendResp({ text: extractPageText() });
+      return true;
+    }
+  });
 })();
