@@ -1,0 +1,67 @@
+{
+  "timeRange": "this_week",
+  "summary": {
+    "overallHealthScore": 72,
+    "productiveTimeRatio": 48,
+    "weeklyImprovementPercent": 15
+  },
+  "alerts": [
+    {
+      "icon": "AlertTriangle",
+      "title": "Negative Content Alert",
+      "description": "Your negative content consumption increased by 8% this week. Consider diversifying your sources.",
+      "color": "border-red-500",
+      "bgColor": "bg-red-500/10",
+      "buttonColor": "bg-red-500 hover:bg-red-600",
+      "buttonText": "Learn More"
+    },
+    {
+      "icon": "Grid",
+      "title": "Content Bubble Detected",
+      "description": "You've been in a tech content bubble. Try exploring other topics for a balanced perspective.",
+      "color": "border-purple-500",
+      "bgColor": "bg-purple-500/10",
+      "buttonColor": "bg-yellow-500 hover:bg-yellow-600",
+      "buttonText": "Explore Topics"
+    },
+    {
+      "icon": "TrendingUp",
+      "title": "Great Progress!",
+      "description": "Great job! Your productive screen time increased by 15% compared to last week.",
+      "color": "border-green-500",
+      "bgColor": "bg-green-500/10",
+      "buttonColor": "bg-green-500 hover:bg-green-600",
+      "buttonText": "View Details"
+    },
+    {
+      "icon": "MessageSquare",
+      "title": "Social Media Limit",
+      "description": "Your social media usage is 22% above your target. Consider setting app limits.",
+      "color": "border-blue-500",
+      "bgColor": "bg-blue-500/10",
+      "buttonColor": "bg-blue-500 hover:bg-blue-600",
+      "buttonText": "Set Limit"
+    }
+  ],
+  "weeklyProgress": [
+    { "label": "Reduce Social Media Time", "progress": 65, "color": "bg-blue-500" },
+    { "label": "Increase Productive Hours", "progress": 80, "color": "bg-green-500" },
+    { "label": "Diversify Content Sources", "progress": 45, "color": "bg-purple-500" }
+  ],
+  "emotionalBalance": {
+    "balanceScore": 72,
+    "segments": [
+      { "name": "Positive", "value": 45, "color": "#10b981" },
+      { "name": "Neutral", "value": 30, "color": "#6b7280" },
+      { "name": "Negative", "value": 15, "color": "#ef4444" },
+      { "name": "Biased", "value": 10, "color": "#f59e0b" }
+    ]
+  },
+  "contentCategories": [
+    { "name": "Technology", "percentage": 35, "color": "bg-blue-500" },
+    { "name": "Entertainment", "percentage": 25, "color": "bg-orange-500" },
+    { "name": "News", "percentage": 18, "color": "bg-red-500" },
+    { "name": "Social", "percentage": 15, "color": "bg-purple-500" },
+    { "name": "Other", "percentage": 7, "color": "bg-gray-500" }
+  ]
+}

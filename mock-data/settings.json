@@ -1,0 +1,21 @@
+{
+  "websites": [
+    { "name": "github.com", "category": "Productivity" },
+    { "name": "youtube.com", "category": "Entertainment" },
+    { "name": "twitter.com", "category": "Social Media" }
+  ],
+  "trackingPrefs": {
+    "activeTime": true,
+    "contentAnalysis": true,
+    "engagement": true,
+    "screenshots": false
+  },
+  "notifications": {
+    "dailySummary": true,
+    "screenTimeAlerts": true,
+    "weeklyReport": true
+  },
+  "accessibility": {
+    "fontSize": 16
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "timeRange": "this_week",
+  "weeklyData": [
+    { "day": "Mon", "productive": 3, "distracting": 2.5 },
+    { "day": "Tue", "productive": 3.5, "distracting": 2 },
+    { "day": "Wed", "productive": 3.2, "distracting": 2.8 },
+    { "day": "Thu", "productive": 4, "distracting": 4 },
+    { "day": "Fri", "productive": 2.8, "distracting": 3.5 },
+    { "day": "Sat", "productive": 2, "distracting": 5 },
+    { "day": "Sun", "productive": 1.5, "distracting": 5.5 }
+  ],
+  "heatmap": {
+    "hours": [
+      "0:00", "1:00", "2:00", "3:00", "4:00", "5:00",
+      "6:00", "7:00", "8:00", "9:00", "10:00", "11:00",
+      "12:00", "13:00", "14:00", "15:00", "16:00",
+      "17:00", "18:00", "19:00", "20:00", "21:00",
+      "22:00", "23:00"
+    ],
+    "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    "data": [
+      { "hour": "9:00", "day": "Mon", "intensity": 2 },
+      { "hour": "10:00", "day": "Mon", "intensity": 3 },
+      { "hour": "14:00", "day": "Tue", "intensity": 4 },
+      { "hour": "15:00", "day": "Wed", "intensity": 1 },
+      { "hour": "20:00", "day": "Fri", "intensity": 5 }
+    ]
+  },
+  "stats": [
+    { "label": "Total Clicks Today", "value": "1,247", "change": "↑ 10% from yesterday" },
+    { "label": "Avg Session Duration", "value": "42m", "change": "Optimal range" },
+    { "label": "Most Active Hour", "value": "2-3 PM", "change": "Peak productivity" },
+    { "label": "Total Sessions", "value": "23", "change": "↓ 5 from yesterday" }
+  ]
+}

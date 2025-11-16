@@ -1,0 +1,47 @@
+{
+  "user": {
+    "id": "user-123",
+    "displayName": "Shrey",
+    "email": "shrey@example.com"
+  },
+  "timeRange": "this_week",
+  "metrics": [
+    {
+      "title": "Total Screen Time",
+      "value": "8h 7m",
+      "change": "↑ 12% vs yesterday",
+      "trend": "up",
+      "color": "border-blue-500"
+    },
+    {
+      "title": "Productive Time",
+      "value": "3h 54m",
+      "change": "↑ 15% vs yesterday",
+      "trend": "up",
+      "color": "border-green-500"
+    },
+    {
+      "title": "Social Media",
+      "value": "1h 40m",
+      "change": "↓ 8% vs yesterday",
+      "trend": "down",
+      "color": "border-purple-500"
+    },
+    {
+      "title": "Entertainment",
+      "value": "2h 33m",
+      "change": "↑ 5% vs yesterday",
+      "trend": "up",
+      "color": "border-orange-500"
+    }
+  ],
+  "weeklyData": [
+    { "day": "Mon", "Productive": 150, "Social": 100, "Entertainment": 80 },
+    { "day": "Tue", "Productive": 180, "Social": 120, "Entertainment": 100 },
+    { "day": "Wed", "Productive": 200, "Social": 150, "Entertainment": 120 },
+    { "day": "Thu", "Productive": 280, "Social": 180, "Entertainment": 200 },
+    { "day": "Fri", "Productive": 150, "Social": 120, "Entertainment": 180 },
+    { "day": "Sat", "Productive": 100, "Social": 180, "Entertainment": 250 },
+    { "day": "Sun", "Productive": 80, "Social": 150, "Entertainment": 240 }
+  ]
+}
