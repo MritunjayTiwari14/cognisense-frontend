@@ -53,9 +53,6 @@ npm install
 
 # Build the extension
 npm run build
-
-# For development with hot reload
-npm run dev
 ```
 
 ### Browser Installation
@@ -73,11 +70,7 @@ npm run dev
 The extension is designed to work with a separate dashboard website for comprehensive analytics:
 
 ### Backend API Endpoints
-Configure these in your backend to receive extension data:
-
-- `POST /sessions` - Session duration and metadata
-- `POST /content-analysis` - Content analysis results
-- `POST /engagement` - User interaction metrics
+Configure the backend - https://github.com/DhruvPokhriyal/cognisense-backend
 
 ### Dashboard Features
 - Daily/weekly activity summaries
@@ -125,24 +118,7 @@ VITE_API_BASE_URL=https://your-backend-api.com
 ### Security Features
 - **Input Filtering**: Automatic detection and exclusion of sensitive inputs
 - **Domain Exclusion**: Ability to exclude any domain from tracking
-- **Data Encryption**: Local data can be encrypted (optional)
-- **Audit Trail**: Complete visibility into what data is collected
-
-## 🛠️ Development
-
-### Project Structure
-```
-src/
-├── background/         # Service worker and background processing
-├── content/           # Content script for page analysis
-├── popup/            # Extension popup UI
-├── options/          # Settings and configuration UI
-├── utils/
-│   ├── categories.js    # Website categorization logic
-│   ├── contentAnalysis.js # AI content analysis
-│   └── analytics.js     # Data processing and insights
-└── assets/           # Icons and static assets
-```
+- **Data Encryption**: Data encrypted on transit through https
 
 ### Key Technologies
 - **React** - UI framework for popup and options pages
@@ -190,32 +166,11 @@ To connect with your backend dashboard:
 - **Productivity**: Tips for reducing distracting activities
 - **Well-being**: Guidance for digital wellness
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-- Follow existing code style and patterns
-- Add comprehensive comments for complex logic
-- Test across different browsers
-- Ensure privacy and security best practices
-- Update documentation for new features
 
 ## 📝 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🆘 Support
-
-For issues, feature requests, or questions:
-
-1. Check the existing Issues on GitHub
-2. Create a new Issue with detailed description
-3. Include browser version, extension version, and steps to reproduce
 
 ## 🔮 Roadmap
 
