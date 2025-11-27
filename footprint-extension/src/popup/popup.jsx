@@ -491,9 +491,6 @@ const Popup = () => {
                         </p>
                     </div>
                 </div>
-                <footer className="pf-footer">
-                    <small>Simple time tracking • Privacy-focused</small>
-                </footer>
             </div>
         );
     }
@@ -573,7 +570,6 @@ const Popup = () => {
                     </div>
                 </div>
             )}
-
             <div className="controls">
                 <button
                     className="primary"
@@ -596,12 +592,9 @@ const Popup = () => {
                     </button>
                 </div>
             </div>
-
-            <footer className="pf-footer">
-                <small>Simple time tracking • Privacy-focused</small>
-            </footer>
         </div>
     );
 };
 
 export default Popup;
+
