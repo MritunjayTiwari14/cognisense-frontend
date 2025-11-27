@@ -19,6 +19,25 @@ const isChrome = typeof chrome !== "undefined" && !!chrome.runtime;
 const WEBAPP_URL =
     import.meta.env?.VITE_WEBAPP_URL || "http://localhost:5173";
 
+function decodeJwtPayload(token) {
+    try {
+        const parts = token.split(".");
+        if (parts.length !== 3) return null;
+
+        // Base64URL decode with padding
+        let payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padding = 4 - (payloadBase64.length % 4 || 4);
+        if (padding && padding < 4) {
+            payloadBase64 += "=".repeat(padding);
+        }
+
+        const payloadJson = atob(payloadBase64);
+        return JSON.parse(payloadJson);
+    } catch {
+        return null;
+    }
+}
+
 const Popup = () => {
     const [totalTimeSeconds, setTotalTimeSeconds] = useState(0);
     const [paused, setPaused] = useState(false);
@@ -32,6 +51,31 @@ const Popup = () => {
     const [sessionStartTime, setSessionStartTime] = useState(Date.now()); // When current session started
     const [pauseTime, setPauseTime] = useState(null); // When pause was clicked
     const [hasToken, setHasToken] = useState(null); // null = checking, true/false
+    const [avatarUrl, setAvatarUrl] = useState(null);
+    const [avatarInitial, setAvatarInitial] = useState("");
+    const [avatarError, setAvatarError] = useState(false);
+
+    const loadAvatarFromToken = (accessToken) => {
+        const payload = decodeJwtPayload(accessToken);
+        if (!payload) return;
+
+        const metadata = payload.user_metadata || {};
+        const url = metadata.avatar_url || metadata.picture || null;
+        const name =
+            metadata.full_name ||
+            metadata.name ||
+            payload.email ||
+            "";
+
+        if (url) {
+            setAvatarUrl(url);
+            setAvatarError(false);
+        }
+
+        if (name) {
+            setAvatarInitial(name.charAt(0).toUpperCase());
+        }
+    };
 
     // On mount, just check for an existing Supabase token in chrome.storage.local
     useEffect(() => {
@@ -44,13 +88,29 @@ const Popup = () => {
             chrome.storage.local.get(
                 ["authToken", "access_token", "supabaseToken", "supabase_session"],
                 (result) => {
-                    const token =
-                        result.authToken ||
+                    // Legacy backend token (may not be a JWT)
+                    const legacyAuthToken = result.authToken || null;
+
+                    // Supabase access token (JWT with user_metadata)
+                    const supabaseAccessToken =
+                        (result.supabase_session &&
+                            result.supabase_session.access_token) ||
                         result.access_token ||
                         result.supabaseToken ||
-                        (result.supabase_session &&
-                            result.supabase_session.access_token);
-                    setHasToken(Boolean(token));
+                        null;
+
+                    const hasValidToken = Boolean(
+                        legacyAuthToken || supabaseAccessToken
+                    );
+                    setHasToken(hasValidToken);
+
+                    // Only use the Supabase JWT for avatar data
+                    if (supabaseAccessToken) {
+                        loadAvatarFromToken(supabaseAccessToken);
+                    } else {
+                        setAvatarUrl(null);
+                        setAvatarInitial("");
+                    }
                 }
             );
         } catch (e) {
@@ -513,7 +573,18 @@ const Popup = () => {
     return (
         <div className="popup">
             <header className="pf-header">
-                <div className="logo">⏱️</div>
+                <div className="logo">
+                    {avatarUrl && !avatarError ? (
+                        <img
+                            src={avatarUrl}
+                            alt={avatarInitial || "User avatar"}
+                            className="avatar-img"
+                            onError={() => setAvatarError(true)}
+                        />
+                    ) : (
+                        <span>{avatarInitial || "👤"}</span>
+                    )}
+                </div>
                 <h1>Time Tracker</h1>
                 <div className="status-indicator">
                     {paused ? "⏸️ Paused" : "🟢 Active"}
