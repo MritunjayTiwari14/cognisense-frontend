@@ -68,7 +68,7 @@ VITE_SUPABASE_ANON_KEY=your-public-anon-key
 The dashboard expects a backend API available at:
 
 ```text
-http://localhost:8000/api/v1
+http://localhost:8080/api/v1
 ```
 
 This base URL is referenced in the dashboard pages (e.g. `Dashboard.jsx`, `Analytics.jsx`, `Insights.jsx`, `Settings.jsx`) when fetching metrics and insights. For a reference implementation, see the backend described in the extension docs.
@@ -127,7 +127,7 @@ cognisense-frontend/
 
 - **Routing:** React Router v6 (see `src/App.jsx`)
 - **Authentication:** Supabase with Google OAuth (see `src/Auth.jsx` and `src/AuthContext.jsx`)
-- **Backend API:** Pages call a backend service at `http://localhost:8000/api/v1` with the Supabase access token in the `Authorization` header
+- **Backend API:** Pages call a backend service at `http://localhost:8080/api/v1` with the Supabase access token in the `Authorization` header
 - **State:** React hooks and context for auth and local UI state
 - **Charts:** Recharts components for time and category visualizations
 - **Styling:** Tailwind CSS classes defined in `src/index.css`

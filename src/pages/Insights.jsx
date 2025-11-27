@@ -3,7 +3,7 @@ import { AlertTriangle, TrendingUp, Grid, MessageSquare } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { supabase } from '../supabaseClient';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = 'http://localhost:8080/api/v1';
 
 const Insights = () => {
   const [summary, setSummary] = useState(null);

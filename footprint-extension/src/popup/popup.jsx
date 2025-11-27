@@ -14,6 +14,11 @@ function secToMin(seconds) {
 
 const isChrome = typeof chrome !== "undefined" && !!chrome.runtime;
 
+// Base URL of the main web app used for authentication
+// Configure via VITE_WEBAPP_URL, otherwise default to localhost dev URL
+const WEBAPP_URL =
+    import.meta.env?.VITE_WEBAPP_URL || "http://localhost:5173";
+
 const Popup = () => {
     const [totalTimeSeconds, setTotalTimeSeconds] = useState(0);
     const [paused, setPaused] = useState(false);
@@ -26,6 +31,36 @@ const Popup = () => {
     const [displayTime, setDisplayTime] = useState(0); // For real-time display
     const [sessionStartTime, setSessionStartTime] = useState(Date.now()); // When current session started
     const [pauseTime, setPauseTime] = useState(null); // When pause was clicked
+    const [hasToken, setHasToken] = useState(null); // null = checking, true/false
+
+    // On mount, just check for an existing Supabase token in chrome.storage.local
+    useEffect(() => {
+        if (!isChrome || !chrome.storage || !chrome.storage.local) {
+            setHasToken(false);
+            return;
+        }
+
+        try {
+            chrome.storage.local.get(
+                ["authToken", "access_token", "supabaseToken", "supabase_session"],
+                (result) => {
+                    const token =
+                        result.authToken ||
+                        result.access_token ||
+                        result.supabaseToken ||
+                        (result.supabase_session &&
+                            result.supabase_session.access_token);
+                    setHasToken(Boolean(token));
+                }
+            );
+        } catch (e) {
+            console.warn(
+                "Error checking Supabase token in chrome.storage:",
+                e
+            );
+            setHasToken(false);
+        }
+    }, []);
 
     // Real-time timer effect
     useEffect(() => {
@@ -383,10 +418,87 @@ const Popup = () => {
     };
 
     const openDashboard = () => {
-        // For now, just open the options page as dashboard
-        openOptions();
+        // Open main web app dashboard
+        const targetUrl = WEBAPP_URL;
+        if (!isChrome || !chrome.tabs) {
+            window.open(targetUrl, "_blank");
+            return;
+        }
+
+        try {
+            chrome.tabs.create({ url: targetUrl });
+        } catch (err) {
+            console.warn("Failed to open dashboard:", err);
+            window.open(targetUrl, "_blank");
+        }
     };
 
+    const openWebAppAuth = () => {
+        const targetUrl = `${WEBAPP_URL}/auth`;
+        if (!isChrome || !chrome.tabs) {
+            window.open(targetUrl, "_blank");
+            return;
+        }
+
+        try {
+            chrome.tabs.create({ url: targetUrl });
+        } catch (err) {
+            console.warn("Failed to open web app auth page:", err);
+            window.open(targetUrl, "_blank");
+        }
+    };
+
+    // While we're checking for a token, show a small loading state
+    if (hasToken === null) {
+        return (
+            <div className="popup">
+                <header className="pf-header">
+                    <div className="logo">🧭</div>
+                    <h1>Digital Footprint</h1>
+                </header>
+                <div className="loading">
+                    <div>Checking login status...</div>
+                </div>
+            </div>
+        );
+    }
+
+    // If no Supabase token in chrome.storage, instruct user to sign in on web app
+    if (hasToken === false) {
+        return (
+            <div className="popup">
+                <header className="pf-header">
+                    <div className="logo">⏱️</div>
+                    <h1>Time Tracker</h1>
+                </header>
+                <div className="auth-container">
+                    <div className="auth-card">
+                        <h2 className="auth-title">Sign in to start tracking</h2>
+                        <p className="auth-subtitle">
+                            Use your web dashboard account to keep your browsing
+                            time in sync. Sign in on the website, then reopen
+                            this popup.
+                        </p>
+                        <button
+                            className="primary auth-primary"
+                            onClick={openWebAppAuth}
+                        >
+                            Open web app to sign in
+                        </button>
+                        <p className="auth-helper">
+                            If you just signed out on the website, you will
+                            need to sign in again to continue tracking.
+                        </p>
+                    </div>
+                </div>
+                <footer className="pf-footer">
+                    <small>Simple time tracking • Privacy-focused</small>
+                </footer>
+            </div>
+        );
+    }
+
+    // We have a token but stats are still loading
     if (loading) {
         return (
             <div className="popup">

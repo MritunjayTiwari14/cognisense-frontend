@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = 'http://localhost:8080/api/v1';
 
 const Settings = () => {
   const [websites, setWebsites] = useState([

@@ -231,6 +231,52 @@ function getCategoryIcon(category) {
     return icons[category] || "🌐";
 }
 
+// Handle Supabase OAuth callback coming back to chrome.identity redirect URL
+async function handleSupabaseOAuthCallback(tabId, url) {
+    try {
+        Logger.info("Handling Supabase OAuth callback...", url);
+        const hash = new URL(url).hash;
+        if (!hash || hash.length <= 1) {
+            Logger.warn("Supabase OAuth callback URL missing hash fragment");
+            return;
+        }
+
+        const params = new URLSearchParams(hash.slice(1));
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+
+        if (!accessToken) {
+            Logger.warn("Supabase OAuth callback missing access_token");
+            return;
+        }
+
+        const supabaseSession = {
+            access_token: accessToken,
+            refresh_token: refreshToken,
+        };
+
+        await chrome.storage.local.set({
+            supabase_session: supabaseSession,
+            access_token: accessToken,
+            supabaseToken: accessToken,
+        });
+
+        API_TOKEN = accessToken;
+        Logger.info("Supabase OAuth tokens stored from redirect callback");
+
+        try {
+            await chrome.tabs.remove(tabId);
+        } catch (closeError) {
+            Logger.warn(
+                "Failed to close Supabase OAuth tab:",
+                closeError?.message || closeError
+            );
+        }
+    } catch (error) {
+        Logger.error("Error handling Supabase OAuth callback:", error);
+    }
+}
+
 // === CONTENT ANALYSIS UTILITIES ===
 const SENTIMENT = {
     POSITIVE: "positive",
@@ -574,10 +620,23 @@ function countSyllables(word) {
 
 // API Configuration
 const API_BASE =
-    "http://localhost:8000/api/v1";//process.env.VITE_API_BASE_URL || "https://your-backend-api.com";
-let API_TOKEN = "eyJhbGciOiJIUzI1NiIsImtpZCI6IlhsdkNmQkV0TW50dFNrbmwiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3R4YWVraXVvcnducHludGd5bmNxLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJiYjEzMTJkMi1mYzZhLTQ1M2QtYmU5OC0yYWM0NjkzZDhiOGUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzYzMzYwNTg1LCJpYXQiOjE3NjMzNTY5ODUsImVtYWlsIjoiYUBhLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJhQGEuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiYmIxMzEyZDItZmM2YS00NTNkLWJlOTgtMmFjNDY5M2Q4YjhlIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NjMzNTY5ODV9XSwic2Vzc2lvbl9pZCI6ImE3MjMyNGExLTJjNWItNGU5Yi05ZDE2LWQwNGU1ZGNiMTVmMSIsImlzX2Fub255bW91cyI6ZmFsc2V9.LaUNw15kGCw_FQSTdOmQxfl_YTYy__Ems2aqVz-O0_8";
+    import.meta.env?.VITE_API_BASE_URL ||
+    "http://localhost:8080/api/v1";
+let API_TOKEN =
+    import.meta.env?.VITE_EXTENSION_API_TOKEN ||
+    null;
 // Always use this exact Authorization header value for backend requests (no Bearer prefix)
-const AUTH_HEADER = "eyJhbGciOiJIUzI1NiIsImtpZCI6IlhsdkNmQkV0TW50dFNrbmwiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3R4YWVraXVvcnducHludGd5bmNxLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJiYjEzMTJkMi1mYzZhLTQ1M2QtYmU5OC0yYWM0NjkzZDhiOGUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzYzMzYwNTg1LCJpYXQiOjE3NjMzNTY5ODUsImVtYWlsIjoiYUBhLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJhQGEuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiYmIxMzEyZDItZmM2YS00NTNkLWJlOTgtMmFjNDY5M2Q4YjhlIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NjMzNTY5ODV9XSwic2Vzc2lvbl9pZCI6ImE3MjMyNGExLTJjNWItNGU5Yi05ZDE2LWQwNGU1ZGNiMTVmMSIsImlzX2Fub255bW91cyI6ZmFsc2V9.LaUNw15kGCw_FQSTdOmQxfl_YTYy__Ems2aqVz-O0_8";
+const AUTH_HEADER =
+    import.meta.env?.VITE_EXTENSION_API_TOKEN ||
+    "";
+
+// Supabase OAuth redirect base (for chrome.identity flow)
+const OAUTH_REDIRECT_BASE =
+    typeof chrome !== "undefined" &&
+    chrome.identity &&
+    typeof chrome.identity.getRedirectURL === "function"
+        ? chrome.identity.getRedirectURL()
+        : null;
 
 // Enhanced logging system
 const Logger = {
@@ -898,7 +957,7 @@ async function sendToAPI(data) {
 
         // Prepare payload according to API documentation
         const payload = {
-            user_id: "49497271-8a3f-4aad-8a0e-03ee8265ff91",
+            user_id: userId,
             url: data.url,
             title: data.title || "",
             text: data.text || "",
@@ -1158,13 +1217,17 @@ async function getUserId() {
         // 3) Fallback to previously stored local ID (legacy behavior)
         const stored = await chrome.storage.local.get(["userId"]);
         if (!stored.userId) {
-            const userId = "bb1312d2-fc6a-453d-be98-2ac4693d8b8e";
+            const userId =
+                (typeof crypto !== "undefined" &&
+                    typeof crypto.randomUUID === "function" &&
+                    crypto.randomUUID()) ||
+                `user_${Date.now()}`;
             await chrome.storage.local.set({ userId });
             return userId;
         }
         return stored.userId;
     } catch {
-        return "user_default";
+        return null;
     }
 }
 
@@ -1312,13 +1375,25 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
         await trackPageVisit(tab.url, tab.title);
     } catch (error) {
-        console.error(`❌ [BACKGROUND] Error tracking tab activation:`, error);
+        console.error(
+            `❌ [BACKGROUND] Error tracking tab activation:`,
+            error
+        );
     }
 });
 
 // Track tab updates
-// Track tab updates
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    // Intercept Supabase OAuth callback to chrome.identity redirect URL
+    if (
+        OAUTH_REDIRECT_BASE &&
+        changeInfo.url &&
+        changeInfo.url.startsWith(OAUTH_REDIRECT_BASE)
+    ) {
+        await handleSupabaseOAuthCallback(tabId, changeInfo.url);
+        return;
+    }
+
     if (changeInfo.status === "complete" && tab.url) {
         try {
             // Save time for previous URL if it was different and we were timing it
@@ -1524,6 +1599,70 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                     await processContentAnalysis(message.data, sender.tab);
                 }
                 break;
+
+            case "SUPABASE_SESSION_SYNC": {
+                try {
+                    const accessToken = message.data?.access_token;
+                    const refreshToken = message.data?.refresh_token;
+                    if (!accessToken) {
+                        Logger.warn("SUPABASE_SESSION_SYNC missing access_token");
+                        break;
+                    }
+
+                    const supabaseSession = {
+                        access_token: accessToken,
+                        refresh_token: refreshToken || null,
+                    };
+
+                    await chrome.storage.local.set({
+                        supabase_session: supabaseSession,
+                        access_token: accessToken,
+                        supabaseToken: accessToken,
+                    });
+
+                    API_TOKEN = accessToken;
+                    Logger.info("Supabase session synced from web app");
+                    sendResponse({ success: true });
+                } catch (syncError) {
+                    Logger.error(
+                        "Error handling SUPABASE_SESSION_SYNC:",
+                        syncError
+                    );
+                    try {
+                        sendResponse({ success: false, error: String(syncError) });
+                    } catch {
+                        // ignore
+                    }
+                }
+                break;
+            }
+
+            case "SUPABASE_SESSION_CLEAR": {
+                try {
+                    await chrome.storage.local.remove([
+                        "supabase_session",
+                        "access_token",
+                        "supabaseToken",
+                    ]);
+                    API_TOKEN = null;
+                    Logger.info("Supabase session cleared from web app");
+                    sendResponse({ success: true });
+                } catch (clearError) {
+                    Logger.error(
+                        "Error handling SUPABASE_SESSION_CLEAR:",
+                        clearError
+                    );
+                    try {
+                        sendResponse({
+                            success: false,
+                            error: String(clearError),
+                        });
+                    } catch {
+                        // ignore
+                    }
+                }
+                break;
+            }
 
             case "USER_INTERACTION":
                 if (!isTrackingPaused) {

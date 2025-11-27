@@ -3,7 +3,7 @@ import { Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { supabase } from '../supabaseClient';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = 'http://localhost:8080/api/v1';
 
 const Dashboard = ({ user }) => {
   const [metrics, setMetrics] = useState([]);

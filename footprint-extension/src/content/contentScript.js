@@ -350,6 +350,56 @@
         }
     }, 15000); // Report every 15 seconds instead of 10
 
+    // Bridge: sync Supabase session from web app localStorage to extension
+    function syncSupabaseSessionToExtension() {
+        try {
+            const host = window.location.host || "";
+            // Only attempt on our web app domain (localhost dev or production domain)
+            const isWebApp =
+                host.startsWith("localhost:5173") ||
+                host.includes("cognisense");
+
+            if (!isWebApp) return;
+
+            // Supabase stores auth under sb-<project-ref>-auth-token
+            const key = "sb-txaekiuorwnpyntgyncq-auth-token";
+            const raw = window.localStorage.getItem(key);
+
+            if (!raw) {
+                safeSendMessage({ type: "SUPABASE_SESSION_CLEAR" });
+                return;
+            }
+
+            let parsed;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (e) {
+                console.warn("[CONTENT] Failed to parse Supabase auth token:", e);
+                safeSendMessage({ type: "SUPABASE_SESSION_CLEAR" });
+                return;
+            }
+
+            const access_token = parsed?.access_token;
+            const refresh_token = parsed?.refresh_token;
+
+            if (!access_token) {
+                safeSendMessage({ type: "SUPABASE_SESSION_CLEAR" });
+                return;
+            }
+
+            safeSendMessage({
+                type: "SUPABASE_SESSION_SYNC",
+                data: { access_token, refresh_token },
+            });
+        } catch (e) {
+            console.warn("[CONTENT] Error syncing Supabase session:", e);
+        }
+    }
+
+    // Run the sync once shortly after load, then periodically
+    setTimeout(syncSupabaseSessionToExtension, 2000);
+    setInterval(syncSupabaseSessionToExtension, 15000);
+
     // Enhanced text extraction with metadata
     function extractPageText() {
         try {

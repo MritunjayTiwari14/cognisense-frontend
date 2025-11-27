@@ -12,7 +12,7 @@ Your Digital Footprint Tracker extension now has comprehensive API logging and i
 4. **GET `/api/v1/categories/labels`** - Fetch available content categories
 
 ### 🏗️ Backend Configuration
-- **Base URL**: `http://localhost:8000/api/v1`
+- **Base URL**: `http://localhost:8080/api/v1`
 - **Authentication**: Bearer token support (when available)
 - **User ID Management**: Automatic user ID generation and persistence
 
@@ -51,7 +51,7 @@ Logger.api()     // Detailed API request/response logging
 
 ```
 [FOOTPRINT-TRACKER] 🚀 Digital Footprint Tracker background script initialized
-[FOOTPRINT-TRACKER] 📡 API Base URL: http://localhost:8000/api/v1
+[FOOTPRINT-TRACKER] 📡 API Base URL: http://localhost:8080/api/v1
 [FOOTPRINT-TRACKER] Testing API connectivity...
 [FOOTPRINT-API] GET /ping
   📤 Request Payload: null

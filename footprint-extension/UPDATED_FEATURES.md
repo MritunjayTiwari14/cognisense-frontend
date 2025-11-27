@@ -21,7 +21,7 @@
 - **Site Breakdown**: Shows top sites with time spent on each
 
 ### 🔗 **API Integration**
-- **CogniSense Backend**: Sends tracking data to `http://localhost:8000/api/v1/tracking/ingest`
+- **CogniSense Backend**: Sends tracking data to `http://localhost:8080/api/v1/tracking/ingest`
 - **Authentication**: Generates temporary user IDs (can be upgraded to proper auth)
 - **Data Persistence**: Both local storage and API sync
 - **Error Handling**: Graceful fallback when API is unavailable
@@ -72,7 +72,7 @@ The extension automatically sends tracking data to the CogniSense backend:
 ```
 
 #### **Backend Setup**
-1. Ensure CogniSense backend is running on `localhost:8000`
+1. Ensure CogniSense backend is running on `localhost:8080`
 2. Extension will automatically create user IDs and send data
 3. Check backend logs for incoming tracking data
 4. Use dashboard endpoints to view aggregated analytics
